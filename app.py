@@ -5,66 +5,71 @@ st.set_page_config(page_title="Engenharia de Tráfego - Fortaleza", layout="wide
 
 st.title("🚦 Dashboard de Tráfego (VMD) - Fortaleza")
 
-# Link do CSV da Prefeitura
 URL_CSV = "https://dados.fortaleza.ce.gov.br/dataset/94e77a67-a8a5-4f54-a27c-f9f58c4fe176/resource/fcccc36d-50ee-488a-a814-e7e7e27f9872/download/dadosabertos_volumetrafegomensal.csv"
 
 @st.cache_data
 def carregar_dados():
-    # Carrega os dados com o encoding correto para português
+    # Carrega os dados
     df = pd.read_csv(URL_CSV, sep=",", encoding="latin1", on_bad_lines='skip')
-    
-    # Limpa espaços vazios nos nomes das colunas
     df.columns = [c.strip() for c in df.columns]
     
-    # Converte as colunas numéricas conforme a imagem (VMD, Lon, Lat)
-    # Substituímos vírgula por ponto para o Python entender como número decimal
+    # LIMPEZA PESADA: 
+    # 1. Converte para string, troca vírgula por ponto, remove espaços
+    # 2. Transforma em número. Se falhar, vira NaN.
+    # 3. Preenche NaNs com 0 (para não quebrar o gráfico)
     for col in ['VMD', 'Lon', 'Lat']:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce')
+            df[col] = df[col].astype(str).str.replace(',', '.').str.strip()
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
     return df
 
 try:
     df = carregar_dados()
 
-    # --- INDICADORES (ESTILO POWER BI) ---
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total de Registros", len(df))
-    
-    if 'VMD' in df.columns:
-        c2.metric("VMD Médio (Geral)", f"{df['VMD'].mean():.0f}")
-        ponto_critico = df.loc[df['VMD'].idxmax(), 'ViaSentido']
-        c3.metric("Maior Fluxo Detectado", f"{ponto_critico[:25]}...")
-
-    # --- FILTRO ---
-    busca = st.text_input("🔍 Pesquisar por Via (Ex: Francisco Sa ou Gen. Osorio):")
+    # Filtro de Busca
+    busca = st.text_input("🔍 Pesquisar por Via:", "")
     if busca:
-        df_exibir = df[df['ViaSentido'].str.contains(busca, case=False, na=False)]
+        df_exibir = df[df['ViaSentido'].str.contains(busca, case=False, na=False)].copy()
     else:
-        df_exibir = df
+        df_exibir = df.copy()
+
+    # --- INDICADORES ---
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Registros Encontrados", len(df_exibir))
+    
+    # Só calcula média se houver valores maiores que zero
+    vmd_valido = df_exibir[df_exibir['VMD'] > 0]['VMD']
+    if not vmd_valido.empty:
+        c2.metric("VMD Médio", f"{vmd_valido.mean():.0f}")
+        c3.metric("Maior VMD", f"{vmd_valido.max():.0f}")
 
     # --- ABAS ---
-    tab1, tab2 = st.tabs(["📊 Análise de Dados", "🗺️ Mapa de Calor (Geoestatística)"])
+    tab1, tab2 = st.tabs(["📊 Dados e Gráficos", "🗺️ Mapa Geográfico"])
 
     with tab1:
-        st.subheader("Tabela de Dados Filtrada")
+        st.subheader("Tabela de Dados")
         st.dataframe(df_exibir, use_container_width=True)
         
-        if 'VMD' in df_exibir.columns:
-            st.subheader("Ranking de Volume por Via")
-            # Mostra as 30 vias com maior VMD no filtro atual
-            top_vias = df_exibir.sort_values('VMD', ascending=False).head(30)
-            st.bar_chart(data=top_vias, x='ViaSentido', y='VMD')
+        # Só tenta desenhar o gráfico se houver dados numéricos reais
+        if not vmd_valido.empty:
+            st.subheader("Top 20 Vias por Volume")
+            # Ordenamos para garantir que o gráfico não receba valores infinitos
+            graf_df = df_exibir.sort_values('VMD', ascending=False).head(20)
+            # Usando st.bar_chart mas garantindo que o X e Y existam
+            st.bar_chart(data=graf_df, x='ViaSentido', y='VMD')
 
     with tab2:
-        st.subheader("Distribuição Geográfica dos Sensores")
-        # O Streamlit precisa que as colunas se chamem 'lat' e 'lon' (minúsculo)
-        if 'Lat' in df_exibir.columns and 'Lon' in df_exibir.columns:
-            mapa_df = df_exibir[['Lat', 'Lon']].dropna()
-            mapa_df.columns = ['lat', 'lon'] # Renomeando para o padrão do mapa
+        st.subheader("Localização dos Sensores")
+        # Filtrando apenas quem tem coordenadas reais (diferentes de 0)
+        mapa_df = df_exibir[(df_exibir['Lat'] != 0) & (df_exibir['Lon'] != 0)].copy()
+        
+        if not mapa_df.empty:
+            mapa_df = mapa_df[['Lat', 'Lon']]
+            mapa_df.columns = ['lat', 'lon']
             st.map(mapa_df)
         else:
-            st.warning("Coordenadas (Lat/Lon) não encontradas ou inválidas.")
+            st.info("Nenhuma coordenada válida encontrada para este filtro.")
 
 except Exception as e:
-    st.error(f"Erro ao processar: {e}")
+    st.error(f"Erro Crítico: {e}")
