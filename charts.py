@@ -158,10 +158,10 @@ def chart_anual(df: pd.DataFrame) -> go.Figure:
     ))
     fig.add_trace(go.Scatter(
         x=anual["Ano"], y=anual["VMD_medio"],
-        mode="lines+markers", line=dict(color=C_NEUTRO, width=3),
+        mode="lines+markers+text", line=dict(color=C_NEUTRO, width=3),
         marker=dict(size=8, symbol="diamond"), name="Média anual",
         text=anual["VMD_medio"].apply(lambda v: f"{v:,}".replace(",", ".")),
-        textposition="top center", mode="lines+markers+text",
+        textposition="top center",
         textfont=dict(size=10, color=C_TEXT),
     ))
     fig.add_trace(go.Scatter(
