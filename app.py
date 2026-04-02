@@ -3,77 +3,68 @@ import pandas as pd
 
 st.set_page_config(page_title="Engenharia de Tráfego - Fortaleza", layout="wide")
 
-st.title("🚦 Monitor de Fluxo Veicular (AMC)")
+st.title("🚦 Dashboard de Tráfego (VMD) - Fortaleza")
 
-# Link que você forneceu
+# Link do CSV da Prefeitura
 URL_CSV = "https://dados.fortaleza.ce.gov.br/dataset/94e77a67-a8a5-4f54-a27c-f9f58c4fe176/resource/fcccc36d-50ee-488a-a814-e7e7e27f9872/download/dadosabertos_volumetrafegomensal.csv"
 
 @st.cache_data
-def carregar_base():
-    # Lendo o CSV. Como você viu que a coluna é 'ViaSentido', 
-    # vamos manter o case original ou tratar depois.
+def carregar_dados():
+    # Carrega os dados com o encoding correto para português
     df = pd.read_csv(URL_CSV, sep=",", encoding="latin1", on_bad_lines='skip')
     
-    # Limpeza básica: remove espaços em branco dos nomes das colunas
+    # Limpa espaços vazios nos nomes das colunas
     df.columns = [c.strip() for c in df.columns]
     
-    # Converter colunas numéricas (Volume, Lat, Long) se existirem
-    # O 'errors=coerce' transforma o que não for número em NaN (vazio)
-    cols_numericas = ['Volume', 'Latitude', 'Longitude', 'VolumeMedio']
-    for col in cols_numericas:
+    # Converte as colunas numéricas conforme a imagem (VMD, Lon, Lat)
+    # Substituímos vírgula por ponto para o Python entender como número decimal
+    for col in ['VMD', 'Lon', 'Lat']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce')
             
     return df
 
 try:
-    df_completo = carregar_base()
+    df = carregar_dados()
 
-    # Mapeando o nome da coluna de localização
-    # Se 'ViaSentido' existe, usamos ela, senão pegamos a primeira coluna disponível
-    col_via = 'ViaSentido' if 'ViaSentido' in df_completo.columns else df_completo.columns[0]
-
-    # --- INDICADORES TIPO POWER BI ---
+    # --- INDICADORES (ESTILO POWER BI) ---
     c1, c2, c3 = st.columns(3)
-    c1.metric("Total de Registros", f"{len(df_completo):,}")
+    c1.metric("Total de Registros", len(df))
     
-    if 'Volume' in df_completo.columns:
-        c2.metric("Média de Volume", f"{df_completo['Volume'].mean():.2f}")
-        maior_fluxo = df_completo.loc[df_completo['Volume'].idxmax(), col_via]
-        c3.metric("Ponto mais Movimentado", str(maior_fluxo)[:20] + "...")
+    if 'VMD' in df.columns:
+        c2.metric("VMD Médio (Geral)", f"{df['VMD'].mean():.0f}")
+        ponto_critico = df.loc[df['VMD'].idxmax(), 'ViaSentido']
+        c3.metric("Maior Fluxo Detectado", f"{ponto_critico[:25]}...")
 
-    # --- BUSCA ---
-    busca = st.text_input(f"🔍 Pesquisar na coluna {col_via} (ex: Santos Dumont):")
-
+    # --- FILTRO ---
+    busca = st.text_input("🔍 Pesquisar por Via (Ex: Francisco Sa ou Gen. Osorio):")
     if busca:
-        # Filtro que ignora maiúsculas/minúsculas
-        df_exibir = df_completo[df_completo[col_via].str.contains(busca, case=False, na=False)]
+        df_exibir = df[df['ViaSentido'].str.contains(busca, case=False, na=False)]
     else:
-        df_exibir = df_completo
+        df_exibir = df
 
-    # --- ABAS DE VISUALIZAÇÃO ---
-    aba1, aba2 = st.tabs(["📊 Dados e Gráficos", "🗺️ Mapa Geoestatístico"])
+    # --- ABAS ---
+    tab1, tab2 = st.tabs(["📊 Análise de Dados", "🗺️ Mapa de Calor (Geoestatística)"])
 
-    with aba1:
-        st.subheader("Tabela de Dados Extraída")
+    with tab1:
+        st.subheader("Tabela de Dados Filtrada")
         st.dataframe(df_exibir, use_container_width=True)
         
-        if 'Volume' in df_exibir.columns:
-            st.subheader("Gráfico de Volume por Ponto")
-            # Mostrando os 40 maiores volumes do filtro atual
-            top_40 = df_exibir.sort_values('Volume', ascending=False).head(40)
-            st.bar_chart(data=top_40, x=col_via, y='Volume')
+        if 'VMD' in df_exibir.columns:
+            st.subheader("Ranking de Volume por Via")
+            # Mostra as 30 vias com maior VMD no filtro atual
+            top_vias = df_exibir.sort_values('VMD', ascending=False).head(30)
+            st.bar_chart(data=top_vias, x='ViaSentido', y='VMD')
 
-    with aba2:
-        st.subheader("Visualização Espacial")
-        # Para o mapa funcionar, o Streamlit precisa de colunas chamadas exatamente 'latitude' e 'longitude'
-        if 'Latitude' in df_exibir.columns and 'Longitude' in df_exibir.columns:
-            mapa_df = df_exibir[['Latitude', 'Longitude']].dropna()
-            mapa_df.columns = ['lat', 'lon'] # Renomeando para o padrão do st.map
+    with tab2:
+        st.subheader("Distribuição Geográfica dos Sensores")
+        # O Streamlit precisa que as colunas se chamem 'lat' e 'lon' (minúsculo)
+        if 'Lat' in df_exibir.columns and 'Lon' in df_exibir.columns:
+            mapa_df = df_exibir[['Lat', 'Lon']].dropna()
+            mapa_df.columns = ['lat', 'lon'] # Renomeando para o padrão do mapa
             st.map(mapa_df)
         else:
-            st.info("As colunas de coordenadas não foram detectadas ou estão vazias.")
+            st.warning("Coordenadas (Lat/Lon) não encontradas ou inválidas.")
 
 except Exception as e:
-    st.error(f"Erro ao processar dados: {e}")
-    st.write("Colunas detectadas no seu CSV:", list(df_completo.columns) if 'df_completo' in locals() else "Não carregou.")
+    st.error(f"Erro ao processar: {e}")
