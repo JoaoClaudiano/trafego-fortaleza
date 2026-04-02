@@ -2,50 +2,45 @@ import streamlit as st
 import pandas as pd
 
 # Configuração da página
-st.set_page_config(page_title="Monitor de Tráfego - Fortaleza", layout="wide")
+st.set_page_config(page_title="Monitor de Tráfego AMC", layout="wide")
 
-st.title("📊 Extração de Dados de Tráfego (AMC)")
-st.markdown("Esta ferramenta acessa o Portal de Dados abertos da Prefeitura para analisar o volume veicular.")
+st.title("📊 Extração de Dados de Tráfego de Fortaleza")
+st.markdown("Utilizando o link fixo do Portal de Dados Abertos da AMC.")
 
-# Link do CSV (Volume de Tráfego 2023 - Portal de Dados Abertos)
+# O link que você encontrou (Link Fixo)
 URL_CSV = "https://dados.fortaleza.ce.gov.br/dataset/94e77a67-a8a5-4f54-a27c-f9f58c4fe176/resource/fcccc36d-50ee-488a-a814-e7e7e27f9872/download/dadosabertos_volumetrafegomensal.csv"
 
-# Função para carregar os dados (com cache para ficar rápido)
 @st.cache_data
 def carregar_dados():
-    # Lendo o CSV da prefeitura
-    df = pd.read_csv(URL_CSV, sep=";", encoding="utf-8")
-    # Limpando nomes de colunas (removendo espaços extras se houver)
-    df.columns = df.columns.str.strip()
+    # Adicionamos 'sep' e 'encoding' para evitar erros de leitura
+    # O 'on_bad_lines' pula linhas que possam estar corrompidas no servidor
+    df = pd.read_csv(URL_CSV, sep=",", encoding="latin1", on_bad_lines='skip')
+    
+    # Padronizando os nomes das colunas para minúsculo para facilitar a busca
+    df.columns = [str(c).strip().lower() for c in df.columns]
     return df
 
 try:
-    with st.spinner('Acessando base de dados da Prefeitura...'):
+    with st.spinner('Lendo dados da AMC...'):
         dados = carregar_dados()
 
-    # --- INTERFACE DE FILTROS ---
-    st.sidebar.header("Filtros de Pesquisa")
+    # Filtros na Barra Lateral
+    st.sidebar.header("Configurações")
     
-    # Filtro por nome da rua/logradouro
-    busca_rua = st.sidebar.text_input("Digite o nome da via (ex: Washington Soares):")
+    # Identificando as colunas disponíveis para busca (ajustado para o novo CSV)
+    coluna_local = 'local' if 'local' in dados.columns else dados.columns[0]
     
-    # Aplicando o filtro se o usuário digitar algo
-    if busca_rua:
-        dados_exibir = dados[dados['local'].str.contains(busca_rua, case=False, na=False)]
+    busca = st.sidebar.text_input(f"Pesquisar por via (ex: Santos Dumont):")
+
+    if busca:
+        dados_filtrados = dados[dados[coluna_local].str.contains(busca, case=False, na=False)]
     else:
-        dados_exibir = dados.head(100) # Mostra os primeiros 100 por padrão
+        dados_filtrados = dados.head(50)
 
-    # --- EXIBIÇÃO DOS RESULTADOS ---
-    col1, col2 = st.columns(2)
-    col1.metric("Registros Encontrados", len(dados_exibir))
-    
-    st.subheader("Tabela de Dados")
-    st.dataframe(dados_exibir, use_container_width=True)
-
-    # Exemplo de gráfico se houver dados numéricos de volume
-    if not dados_exibir.empty and 'volume' in dados_exibir.columns:
-        st.subheader("Volume por Ponto de Coleta")
-        st.bar_chart(data=dados_exibir, x='local', y='volume')
+    # Exibição
+    st.metric("Total de Registros no Filtro", len(dados_filtrados))
+    st.dataframe(dados_filtrados, use_container_width=True)
 
 except Exception as e:
-    st.error(f"Erro ao conectar com o site da prefeitura: {e}")
+    st.error(f"Ainda há um problema de conexão ou formato: {e}")
+    st.info("Dica: Verifique se o link abre direto no seu navegador. Se abrir, o problema pode ser o 'separador' do CSV.")
