@@ -1,46 +1,66 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
-# Configuração da página
-st.set_page_config(page_title="Monitor de Tráfego AMC", layout="wide")
+st.set_page_config(page_title="Engenharia de Tráfego - UFC", layout="wide")
 
-st.title("📊 Extração de Dados de Tráfego de Fortaleza")
-st.markdown("Utilizando o link fixo do Portal de Dados Abertos da AMC.")
+st.title("🚦 Dashboard de Mobilidade Urbana (AMC Fortaleza)")
 
-# O link que você encontrou (Link Fixo)
 URL_CSV = "https://dados.fortaleza.ce.gov.br/dataset/94e77a67-a8a5-4f54-a27c-f9f58c4fe176/resource/fcccc36d-50ee-488a-a814-e7e7e27f9872/download/dadosabertos_volumetrafegomensal.csv"
 
 @st.cache_data
-def carregar_dados():
-    # Adicionamos 'sep' e 'encoding' para evitar erros de leitura
-    # O 'on_bad_lines' pula linhas que possam estar corrompidas no servidor
+def carregar_base_completa():
+    # Lendo a base completa
     df = pd.read_csv(URL_CSV, sep=",", encoding="latin1", on_bad_lines='skip')
-    
-    # Padronizando os nomes das colunas para minúsculo para facilitar a busca
     df.columns = [str(c).strip().lower() for c in df.columns]
-    return df
+    
+    # Tratamento de dados para Geoestatística (convertendo vírgula para ponto em lat/long)
+    for col in ['latitude', 'longitude', 'volume']:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce')
+    
+    return df.dropna(subset=['local']) # Remove linhas sem identificação de local
 
 try:
-    with st.spinner('Lendo dados da AMC...'):
-        dados = carregar_dados()
+    df_completo = carregar_base_completa()
 
-    # Filtros na Barra Lateral
-    st.sidebar.header("Configurações")
+    # --- ESTILO POWER BI (INDICADORES) ---
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total de Registros", f"{len(df_completo):,}")
     
-    # Identificando as colunas disponíveis para busca (ajustado para o novo CSV)
-    coluna_local = 'local' if 'local' in dados.columns else dados.columns[0]
-    
-    busca = st.sidebar.text_input(f"Pesquisar por via (ex: Santos Dumont):")
+    if 'volume' in df_completo.columns:
+        vmd_medio = df_completo['volume'].mean()
+        col2.metric("Volume Médio (VMD)", f"{vmd_medio:.2f}")
+        col3.metric("Ponto de Maior Fluxo", df_completo.loc[df_completo['volume'].idxmax(), 'local'])
 
+    # --- FILTRO DINÂMICO ---
+    busca = st.text_input("🔍 Filtrar via específica (ex: Bezerra de Menezes):")
+    
     if busca:
-        dados_filtrados = dados[dados[coluna_local].str.contains(busca, case=False, na=False)]
+        df_final = df_completo[df_completo['local'].str.contains(busca, case=False, na=False)]
     else:
-        dados_filtrados = dados.head(50)
+        df_final = df_completo # AQUI AGORA PEGA TUDO!
 
-    # Exibição
-    st.metric("Total de Registros no Filtro", len(dados_filtrados))
-    st.dataframe(dados_filtrados, use_container_width=True)
+    # --- VISUALIZAÇÃO DE DADOS ---
+    tab1, tab2, tab3 = st.tabs(["📋 Tabela Completa", "🗺️ Mapa Geoestatístico", "📊 Gráficos de Análise"])
+
+    with tab1:
+        st.subheader("Dados Extraídos")
+        st.dataframe(df_final, use_container_width=True)
+
+    with tab2:
+        st.subheader("Distribuição Espacial do Tráfego")
+        # Se o CSV tiver lat/lon, o streamlit plota o mapa na hora
+        if 'latitude' in df_final.columns and 'longitude' in df_final.columns:
+            mapa_data = df_final[['latitude', 'longitude']].dropna()
+            st.map(mapa_data)
+        else:
+            st.warning("Colunas de Latitude/Longitude não encontradas para gerar o mapa.")
+
+    with tab3:
+        st.subheader("Análise de Volume")
+        if 'volume' in df_final.columns:
+            st.bar_chart(data=df_final.head(30), x='local', y='volume')
 
 except Exception as e:
-    st.error(f"Ainda há um problema de conexão ou formato: {e}")
-    st.info("Dica: Verifique se o link abre direto no seu navegador. Se abrir, o problema pode ser o 'separador' do CSV.")
+    st.error(f"Erro ao processar base completa: {e}")
