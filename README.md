@@ -1,62 +1,66 @@
-# 🚦 VMD Fortaleza
+# 🚦 VMD Fortaleza — Dashboard v2
 
-Dashboard interativo para explorar os dados de **Volume Médio Diário (VMD) de Tráfego** da Prefeitura de Fortaleza, publicados no Portal de Dados Abertos.
-
-## Demo
-
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io)
+Dashboard analítico para explorar os dados de **Volume Médio Diário (VMD) de Tráfego**
+da Prefeitura de Fortaleza, com foco em análise temporal, espacial e detecção de anomalias.
 
 ## Funcionalidades
 
-- **Tabela** — dados paginados e filtráveis, download em CSV
-- **Top vias** — ranking das vias com maior volume de tráfego
-- **Série temporal** — evolução do VMD de uma via ao longo dos meses
-- **Mapa** — distribuição geográfica dos pontos de medição
-- Cache automático de 24h para não sobrecarregar o servidor da prefeitura
+| Aba | Descrição |
+|---|---|
+| 📋 Dados | Tabela filtrável com download CSV |
+| 📊 Ranking de vias | Top N vias + heatmap temporal |
+| 📈 Série temporal | Evolução mensal + variação m/m + média móvel |
+| 📆 Estatísticas anuais | Evolução anual, sazonalidade, boxplot por mês |
+| 🏘️ Por bairro | Agregação por bairro + pivot bairro × ano |
+| 🔀 Comparar períodos | Variação entre dois meses, scatter plot |
+| ⚠️ Anomalias | Detecção por Z-score, cards de alertas, ranking |
+| 🗺️ Mapa | Distribuição geográfica com intensidade de cores |
 
 ## Rodando localmente
 
 ```bash
-# 1. Clone o repositório
 git clone https://github.com/SEU_USUARIO/vmd-fortaleza.git
 cd vmd-fortaleza
 
-# 2. Crie e ative um ambiente virtual (recomendado)
 python -m venv .venv
-source .venv/bin/activate      # Linux/Mac
-.venv\Scripts\activate         # Windows
+source .venv/bin/activate   # Linux/Mac
+.venv\Scripts\activate      # Windows
 
-# 3. Instale as dependências
 pip install -r requirements.txt
-
-# 4. Rode o app
 streamlit run app.py
 ```
 
-Acesse em → **http://localhost:8501**
+Acesse → **http://localhost:8501**
 
 ## Deploy no Streamlit Community Cloud (gratuito)
 
 1. Suba o repositório no GitHub
 2. Acesse [share.streamlit.io](https://share.streamlit.io)
-3. Clique em **New app** → selecione o repositório → `app.py`
-4. Clique em **Deploy** — pronto!
+3. **New app** → selecione o repo → `app.py`
+4. **Deploy** ✓
 
-## Fonte dos dados
+## Estrutura
 
-| Campo | Descrição |
-|---|---|
-| `Sitio` | Código do ponto de medição |
-| `Data` | Período (formato `AAAA-MM`) |
-| `ViaSentido` | Nome da via e sentido |
-| `VMD` | Volume Médio Diário (veículos/dia) |
-| `Lon` / `Lat` | Coordenadas do ponto |
-
-**URL do dataset:**
 ```
-https://dados.fortaleza.ce.gov.br/dataset/94e77a67-a8a5-4f54-a27c-f9f58c4fe176
+vmd-fortaleza/
+├── app.py          # Layout e UI (Streamlit)
+├── data.py         # Carregamento, limpeza e análises
+├── charts.py       # Todos os gráficos (Plotly)
+├── requirements.txt
+└── README.md
 ```
 
-## Licença
+## Metodologia — Detecção de Anomalias
 
-MIT — dados públicos da Prefeitura de Fortaleza.
+Calculado o Z-score de cada registro dentro da série histórica da mesma via:
+
+```
+Z = |VMD - média_via| / desvio_padrão_via
+```
+
+Registros com Z ≥ 2.5 (configurável na sidebar) são marcados como anômalos.
+
+## Fonte
+
+Portal de Dados Abertos — Prefeitura de Fortaleza  
+https://dados.fortaleza.ce.gov.br
