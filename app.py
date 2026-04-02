@@ -8,7 +8,7 @@ st.title("📊 Extração de Dados de Tráfego (AMC)")
 st.markdown("Esta ferramenta acessa o Portal de Dados abertos da Prefeitura para analisar o volume veicular.")
 
 # Link do CSV (Volume de Tráfego 2023 - Portal de Dados Abertos)
-URL_CSV = "https://dados.fortaleza.ce.gov.br/dataset/2ab237da-5847-4974-bc48-c8d8b9e6e87f/resource/35fc46bb-95ee-4610-ad27-2c5e5330a1eb/download/volumetrafego2023.csv"
+URL_CSV = "https://dados.fortaleza.ce.gov.br/dataset/94e77a67-a8a5-4f54-a27c-f9f58c4fe176/resource/fcccc36d-50ee-488a-a814-e7e7e27f9872/download/dadosabertos_volumetrafegomensal.csv"
 
 # Função para carregar os dados (com cache para ficar rápido)
 @st.cache_data
