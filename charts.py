@@ -281,7 +281,8 @@ def chart_scatter_comp(comp: pd.DataFrame, p1: str, p2: str) -> go.Figure:
         mode="markers",
         marker=dict(color=colors, size=9, opacity=0.8, line=dict(width=0.5, color=C_BORDER)),
         text=comp["ViaSentido"],
-        hovertemplate="<b>%{text}</b><br>%s: %%{x:,}<br>%s: %%{y:,}<extra></extra>" % (p1, p2),
+        # Substitua a linha 284 em charts.py por esta:
+        hovertemplate = f"<b>%{{text}}</b><br>{p1}: %{{x:,}}<br>{p2}: %{{y:,}}<extra></extra>"
     ))
     fig.update_layout(
         title=dict(text=f"VMD {p1} vs {p2} por via", font=dict(size=14)),
